@@ -7,6 +7,12 @@ services:
       dockerfile: docker/php/Dockerfile
       target: dev
     container_name: fund_transfer_app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     volumes:
       - .:/var/www/html:cached
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
@@ -77,3 +83,24 @@ volumes:
 networks:
   fund_transfer_net:
     driver: bridge
+
+  # Messenger worker — consumes the webhook delivery queue
+  worker:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: dev
+    container_name: fund_transfer_worker
+    command: php bin/console messenger:consume webhooks --limit=500 --time-limit=3600 -vv
+    volumes:
+      - .:/var/www/html:cached
+    environment:
+      - APP_ENV=${APP_ENV:-dev}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - fund_transfer_net

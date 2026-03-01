@@ -206,7 +206,7 @@ All errors follow a consistent structure:
 # Create a transfer
 curl -X POST http://localhost:8080/api/v1/transfers \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: dev-api-key-change-in-production" \
+  -H "X-API-Key: 6ad27511260e31c6377a2be8533d6fec9f0c4e0e19c72ec8" \
   -H "Idempotency-Key: $(uuidgen)" \
   -d '{
     "from_account_id": "550e8400-e29b-41d4-a716-446655440001",
@@ -218,7 +218,7 @@ curl -X POST http://localhost:8080/api/v1/transfers \
 
 # Get a transfer by ID
 curl http://localhost:8080/api/v1/transfers/TRANSFER-UUID-HERE \
-  -H "X-API-Key: dev-api-key-change-in-production"
+  -H "X-API-Key: 6ad27511260e31c6377a2be8533d6fec9f0c4e0e19c72ec8"
 ```
 
 ---
@@ -293,7 +293,7 @@ export default function () {
     {
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': 'dev-api-key-change-in-production',
+        'X-API-Key': '6ad27511260e31c6377a2be8533d6fec9f0c4e0e19c72ec8',
         'Idempotency-Key': uuidv4(),
       }
     }

@@ -1,0 +1,245 @@
+{
+  "info": {
+    "name": "Fund Transfer API",
+    "description": "Production-grade fund transfer API — Postman collection.\n\nImport this file into Postman, set the `base_url` and `api_key` collection variables, then run the full collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080", "type": "string" },
+    { "key": "api_key",  "value": "dev-api-key-change-in-production", "type": "string" },
+    { "key": "account_a_id", "value": "550e8400-e29b-41d4-a716-446655440001", "type": "string" },
+    { "key": "account_b_id", "value": "550e8400-e29b-41d4-a716-446655440002", "type": "string" },
+    { "key": "last_transfer_id", "value": "", "type": "string" }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key",   "value": "X-API-Key" },
+      { "key": "value", "value": "{{api_key}}" },
+      { "key": "in",    "value": "header" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Deep health check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Status is healthy', () => pm.expect(pm.response.json().status).to.eql('healthy'));",
+              "pm.test('MySQL check present', () => pm.expect(pm.response.json().checks.mysql.status).to.eql('healthy'));",
+              "pm.test('Redis check present', () => pm.expect(pm.response.json().checks.redis.status).to.eql('healthy'));"
+            ]}
+          }]
+        },
+        {
+          "name": "Liveness check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/health/live", "host": ["{{base_url}}"], "path": ["health", "live"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"] }
+          }]
+        },
+        {
+          "name": "Prometheus metrics",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/metrics", "host": ["{{base_url}}"], "path": ["metrics"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Content-Type is text/plain', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain'));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Accounts",
+      "item": [
+        {
+          "name": "Create account (Alice)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/accounts", "host": ["{{base_url}}"], "path": ["api","v1","accounts"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"owner_id\": \"user-alice\",\n  \"currency\": \"USD\",\n  \"initial_balance\": \"1000.00\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "const id = pm.response.json().data.id;",
+              "pm.collectionVariables.set('account_a_id', id);",
+              "pm.test('Balance correct', () => pm.expect(pm.response.json().data.balance).to.eql('1000.00'));"
+            ]}
+          }]
+        },
+        {
+          "name": "Create account (Bob)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/accounts", "host": ["{{base_url}}"], "path": ["api","v1","accounts"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"owner_id\": \"user-bob\",\n  \"currency\": \"USD\",\n  \"initial_balance\": \"500.00\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('account_b_id', pm.response.json().data.id);"
+            ]}
+          }]
+        },
+        {
+          "name": "Get account by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/v1/accounts/{{account_a_id}}", "host": ["{{base_url}}"], "path": ["api","v1","accounts","{{account_a_id}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Has balance field', () => pm.expect(pm.response.json().data).to.have.property('balance'));"
+            ]}
+          }]
+        },
+        {
+          "name": "Update account owner",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/v1/accounts/{{account_a_id}}", "host": ["{{base_url}}"], "path": ["api","v1","accounts","{{account_a_id}}"] },
+            "body": { "mode": "raw", "raw": "{\n  \"owner_id\": \"user-alice-v2\"\n}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Owner updated', () => pm.expect(pm.response.json().data.owner_id).to.eql('user-alice-v2'));"
+            ]}
+          }]
+        },
+        {
+          "name": "Get transfer history",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/accounts/{{account_a_id}}/transfers?page=1&per_page=10",
+              "host": ["{{base_url}}"],
+              "path": ["api","v1","accounts","{{account_a_id}}","transfers"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "per_page", "value": "10" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Has pagination meta', () => { const meta = pm.response.json().meta; pm.expect(meta).to.have.property('total'); });"
+            ]}
+          }]
+        },
+        {
+          "name": "Deactivate account",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{base_url}}/api/v1/accounts/{{account_b_id}}", "host": ["{{base_url}}"], "path": ["api","v1","accounts","{{account_b_id}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Account is inactive', () => pm.expect(pm.response.json().data.active).to.be.false);"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "Transfers",
+      "item": [
+        {
+          "name": "Create transfer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",    "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/transfers", "host": ["{{base_url}}"], "path": ["api","v1","transfers"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_account_id\": \"{{account_a_id}}\",\n  \"to_account_id\": \"{{account_b_id}}\",\n  \"amount\": \"100.00\",\n  \"currency\": \"USD\",\n  \"description\": \"Postman test transfer\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "pm.test('Status is completed', () => pm.expect(pm.response.json().data.status).to.eql('completed'));",
+              "pm.collectionVariables.set('last_transfer_id', pm.response.json().data.id);"
+            ]}
+          }]
+        },
+        {
+          "name": "Get transfer by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/v1/transfers/{{last_transfer_id}}", "host": ["{{base_url}}"], "path": ["api","v1","transfers","{{last_transfer_id}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('IDs match', () => pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('last_transfer_id')));"
+            ]}
+          }]
+        },
+        {
+          "name": "Insufficient funds",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",    "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/transfers", "host": ["{{base_url}}"], "path": ["api","v1","transfers"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_account_id\": \"{{account_a_id}}\",\n  \"to_account_id\": \"{{account_b_id}}\",\n  \"amount\": \"999999.00\",\n  \"currency\": \"USD\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 402', () => pm.response.to.have.status(402));",
+              "pm.test('Error code is INSUFFICIENT_FUNDS', () => pm.expect(pm.response.json().error.code).to.eql('INSUFFICIENT_FUNDS'));"
+            ]}
+          }]
+        }
+      ]
+    }
+  ]
+}

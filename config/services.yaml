@@ -35,3 +35,28 @@ services:
     App\Infrastructure\Security\ApiKeyAuthenticator:
         arguments:
             $apiKeyHeader: '%api_key_header%'
+
+    # Audit logger uses the dedicated 'transfer' monolog channel
+    App\Infrastructure\Audit\TransferAuditLogger:
+        arguments:
+            $transferLogger: '@monolog.logger.transfer'
+
+    # Metrics logger uses standard logger
+    App\Infrastructure\Metrics\MetricsCollector:
+        arguments:
+            $logger: '@logger'
+
+    # Docs controller — inject kernel.project_dir
+    App\UI\Api\DocsController:
+        arguments:
+            $projectDir: '%kernel.project_dir%'
+
+    # Interface → Implementation bindings
+    App\Domain\Account\AccountRepository:
+        class: App\Infrastructure\Persistence\DoctrineAccountRepository
+
+    App\Domain\Transfer\TransferRepository:
+        class: App\Infrastructure\Persistence\DoctrineTransferRepository
+
+    App\Domain\Webhook\WebhookRepository:
+        class: App\Infrastructure\Webhook\DoctrineWebhookRepository

@@ -1,0 +1,412 @@
+openapi: 3.1.0
+
+info:
+  title: Fund Transfer API
+  version: 1.0.0
+  description: |
+    A production-grade fund transfer API built with PHP 8.3, Symfony 7, MySQL 8, and Redis 7.
+
+    ## Authentication
+    All `/api/v1/*` endpoints require the `X-API-Key` header.
+
+    ## Idempotency
+    `POST /api/v1/transfers` is idempotent. Include a `Idempotency-Key: <uuid>` header on every
+    request. Retrying with the same key returns the original response without re-executing.
+
+    ## Money Precision
+    All monetary amounts are decimal strings (e.g. `"100.00"`), never floats.
+
+servers:
+  - url: http://localhost:8080
+    description: Local Docker environment
+
+security:
+  - ApiKeyAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    Account:
+      type: object
+      properties:
+        id:          { type: string, format: uuid, example: "550e8400-e29b-41d4-a716-446655440001" }
+        owner_id:    { type: string, example: "user-alice" }
+        currency:    { type: string, enum: [USD, EUR, GBP, JPY, CAD, AUD], example: "USD" }
+        balance:     { type: string, example: "1000.00", description: "Decimal string — never a float" }
+        active:      { type: boolean, example: true }
+        created_at:  { type: string, format: date-time }
+        updated_at:  { type: string, format: date-time }
+
+    Transfer:
+      type: object
+      properties:
+        id:               { type: string, format: uuid }
+        from_account_id:  { type: string, format: uuid }
+        to_account_id:    { type: string, format: uuid }
+        amount:           { type: string, example: "250.00" }
+        currency:         { type: string, enum: [USD, EUR, GBP, JPY, CAD, AUD] }
+        status:           { type: string, enum: [pending, completed, failed] }
+        description:      { type: string, nullable: true }
+        failure_reason:   { type: string, nullable: true }
+        created_at:       { type: string, format: date-time }
+        completed_at:     { type: string, format: date-time, nullable: true }
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:    { type: string, example: "INSUFFICIENT_FUNDS" }
+            message: { type: string, example: "Account has insufficient funds." }
+            details: { type: array, items: { type: object }, description: "Validation error details" }
+
+    HealthStatus:
+      type: object
+      properties:
+        status:    { type: string, enum: [healthy, degraded] }
+        checks:
+          type: object
+          properties:
+            mysql: { type: object, properties: { status: { type: string }, latency_ms: { type: number } } }
+            redis: { type: object, properties: { status: { type: string }, latency_ms: { type: number } } }
+        timestamp: { type: string, format: date-time }
+
+  parameters:
+    AccountId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TransferId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, default: 1, minimum: 1 }
+    PerPage:
+      name: per_page
+      in: query
+      schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UnprocessableEntity:
+      description: Validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+paths:
+  # ── Accounts ────────────────────────────────────────────────────────────────
+
+  /api/v1/accounts:
+    post:
+      operationId: createAccount
+      summary: Create an account
+      tags: [Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [owner_id, currency]
+              properties:
+                owner_id:        { type: string, example: "user-alice" }
+                currency:        { type: string, enum: [USD, EUR, GBP, JPY, CAD, AUD], example: "USD" }
+                initial_balance: { type: string, example: "1000.00", default: "0.00" }
+            examples:
+              basic:
+                summary: Basic account
+                value: { owner_id: "user-alice", currency: "USD" }
+              with_balance:
+                summary: Account with opening balance
+                value: { owner_id: "user-bob", currency: "EUR", initial_balance: "500.00" }
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Account' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  /api/v1/accounts/{id}:
+    get:
+      operationId: getAccount
+      summary: Get account by ID
+      tags: [Accounts]
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      responses:
+        '200':
+          description: Account details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Account' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    patch:
+      operationId: updateAccount
+      summary: Update account metadata
+      tags: [Accounts]
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                owner_id: { type: string, example: "user-alice-updated" }
+            example: { owner_id: "new-owner-id" }
+      responses:
+        '200':
+          description: Account updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Account' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+    delete:
+      operationId: deactivateAccount
+      summary: Deactivate an account (soft delete)
+      description: |
+        Soft-deactivates the account. Deactivated accounts cannot send or receive transfers.
+        This operation is **idempotent** — calling it on an already-inactive account returns 200.
+      tags: [Accounts]
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      responses:
+        '200':
+          description: Account deactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Account' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/accounts/{id}/transfers:
+    get:
+      operationId: getAccountTransfers
+      summary: Transfer history for an account
+      description: Returns paginated transfers where the account was the sender OR receiver.
+      tags: [Accounts]
+      parameters:
+        - { $ref: '#/components/parameters/AccountId' }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PerPage' }
+      responses:
+        '200':
+          description: Transfer history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Transfer' }
+                  meta:
+                    type: object
+                    properties:
+                      account_id:  { type: string, format: uuid }
+                      page:        { type: integer }
+                      per_page:    { type: integer }
+                      total:       { type: integer }
+                      total_pages: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ── Transfers ────────────────────────────────────────────────────────────────
+
+  /api/v1/transfers:
+    post:
+      operationId: createTransfer
+      summary: Initiate a fund transfer
+      description: |
+        Transfer funds between two accounts atomically.
+
+        **Idempotent**: include `Idempotency-Key: <uuid>` header. Retrying with the same key
+        returns the original response with `X-Idempotent-Replayed: true` — the transfer is
+        **not** executed again.
+      tags: [Transfers]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Client-generated UUID v4. Ensures safe retries.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_account_id, to_account_id, amount, currency]
+              properties:
+                from_account_id: { type: string, format: uuid }
+                to_account_id:   { type: string, format: uuid }
+                amount:          { type: string, example: "250.00", description: "Positive decimal string" }
+                currency:        { type: string, enum: [USD, EUR, GBP, JPY, CAD, AUD] }
+                description:     { type: string, maxLength: 500, nullable: true }
+            example:
+              from_account_id: "550e8400-e29b-41d4-a716-446655440001"
+              to_account_id:   "550e8400-e29b-41d4-a716-446655440002"
+              amount:          "100.00"
+              currency:        "USD"
+              description:     "Invoice #1042 payment"
+      responses:
+        '201':
+          description: Transfer completed
+          headers:
+            X-Request-ID: { schema: { type: string }, description: "Unique request trace ID" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Transfer' }
+                  meta:
+                    type: object
+                    properties:
+                      idempotency_key: { type: string, format: uuid }
+        '200':
+          description: Idempotent replay — transfer already processed
+          headers:
+            X-Idempotent-Replayed: { schema: { type: string, enum: ["true"] } }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Transfer' }
+        '402':
+          description: Insufficient funds
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Concurrent request with same idempotency key in-flight
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429':
+          description: Rate limit exceeded
+          headers:
+            Retry-After:         { schema: { type: integer }, description: "Seconds until rate limit resets" }
+            X-RateLimit-Remaining: { schema: { type: integer } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/transfers/{id}:
+    get:
+      operationId: getTransfer
+      summary: Get transfer by ID
+      tags: [Transfers]
+      parameters: [{ $ref: '#/components/parameters/TransferId' }]
+      responses:
+        '200':
+          description: Transfer details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Transfer' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ── Health & Metrics ─────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Deep health check (MySQL + Redis)
+      description: Returns 200 if all dependencies healthy, 503 if degraded.
+      tags: [Observability]
+      security: []
+      responses:
+        '200':
+          description: All systems healthy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthStatus' }
+        '503':
+          description: One or more dependencies degraded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthStatus' }
+
+  /health/live:
+    get:
+      operationId: livenessCheck
+      summary: Shallow liveness check
+      description: Just confirms the PHP process is alive. No dependency checks.
+      tags: [Observability]
+      security: []
+      responses:
+        '200':
+          description: Process alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "ok" }
+
+  /metrics:
+    get:
+      operationId: prometheusMetrics
+      summary: Prometheus metrics
+      description: |
+        Text format metrics compatible with Prometheus scraping.
+        Tracks transfers, amounts, durations, request counts, rate limit hits.
+
+        **Note**: Restrict this endpoint to internal networks in production.
+      tags: [Observability]
+      security: []
+      responses:
+        '200':
+          description: Prometheus text format
+          content:
+            text/plain:
+              example: |
+                # HELP transfers_total Total number of transfer attempts
+                # TYPE transfers_total counter
+                transfers_total{status="completed",currency="USD"} 42

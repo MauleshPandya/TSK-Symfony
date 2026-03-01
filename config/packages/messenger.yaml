@@ -1,0 +1,25 @@
+framework:
+    messenger:
+        # Transport for webhook delivery — backed by Redis Streams
+        transports:
+            webhooks:
+                dsn: '%env(REDIS_URL)%'
+                options:
+                    stream: fund_transfer_webhooks
+                    group: webhook_workers
+                    consumer: '%env(default:hostname:HOSTNAME)%'
+                retry_strategy:
+                    max_retries: 3
+                    delay: 1000       # 1 second initial delay
+                    multiplier: 5     # 1s → 5s → 25s exponential backoff
+                    max_delay: 60000  # Cap at 60 seconds
+
+            dead_letter:
+                dsn: '%env(REDIS_URL)%'
+                options:
+                    stream: fund_transfer_webhooks_failed
+
+        routing:
+            'App\Infrastructure\Messenger\DispatchWebhookMessage': webhooks
+
+        failure_transport: dead_letter

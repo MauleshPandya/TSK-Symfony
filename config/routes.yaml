@@ -1,3 +1,23 @@
 api_transfers:
     resource: ../src/UI/Api/TransferController.php
     type: attribute
+
+api_accounts:
+    resource: ../src/UI/Api/AccountController.php
+    type: attribute
+
+api_health:
+    resource: ../src/UI/Api/HealthController.php
+    type: attribute
+
+api_docs:
+    resource: ../src/UI/Api/DocsController.php
+    type: attribute
+
+api_webhooks:
+    resource: ../src/UI/Api/WebhookController.php
+    type: attribute
+
+api_reporting:
+    resource: ../src/UI/Api/ReportingController.php
+    type: attribute
