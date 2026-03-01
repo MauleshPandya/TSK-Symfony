@@ -1,0 +1,37 @@
+parameters:
+    redis_url: '%env(REDIS_URL)%'
+    rate_limit_per_account: '%env(int:RATE_LIMIT_PER_ACCOUNT)%'
+    idempotency_key_ttl: '%env(int:IDEMPOTENCY_KEY_TTL)%'
+    api_key_header: '%env(API_KEY_HEADER)%'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Kernel.php'
+
+    # Redis client
+    Predis\ClientInterface:
+        class: Predis\Client
+        arguments:
+            $parameters: '%redis_url%'
+            $options:
+                prefix: 'fund_transfer:'
+
+    App\Infrastructure\Redis\IdempotencyService:
+        arguments:
+            $ttl: '%idempotency_key_ttl%'
+
+    App\Infrastructure\Redis\RedisRateLimiter:
+        arguments:
+            $limitPerMinute: '%rate_limit_per_account%'
+
+    App\Infrastructure\Security\ApiKeyAuthenticator:
+        arguments:
+            $apiKeyHeader: '%api_key_header%'

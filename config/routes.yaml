@@ -1,0 +1,3 @@
+api_transfers:
+    resource: ../src/UI/Api/TransferController.php
+    type: attribute

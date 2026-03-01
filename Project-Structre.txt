@@ -1,0 +1,26 @@
+src/
+├── Domain/                    ← Pure business logic, no framework
+│   ├── Account/
+│   │   ├── Account.php        ← Aggregate root
+│   │   ├── Money.php          ← Value object (no floats — ever)
+│   │   └── AccountRepository.php (interface)
+│   └── Transfer/
+│       ├── TransferService.php     ← Core domain logic
+│       └── TransferRecord.php
+│
+├── Application/               ← Use cases / orchestration
+│   └── Transfer/
+│       ├── TransferCommand.php
+│       └── TransferHandler.php
+│
+├── Infrastructure/            ← Framework + DB implementations
+│   ├── Persistence/
+│   │   └── DoctrineAccountRepository.php
+│   ├── Redis/
+│   │   └── IdempotencyService.php
+│   └── RateLimiter/
+│       └── RedisRateLimiter.php
+│
+└── UI/
+    └── Api/
+        └── TransferController.php

@@ -1,0 +1,7 @@
+POST /api/v1/transfers
+  → Headers: Idempotency-Key: <uuid>
+  → Body: { from_account_id, to_account_id, amount, currency }
+  → Returns: 201 transfer record | 422 validation | 409 duplicate | 402 insufficient funds
+
+GET /api/v1/transfers/{id}
+  → Returns transfer status + metadata

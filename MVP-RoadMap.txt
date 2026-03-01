@@ -1,0 +1,28 @@
+Phase 1 — Foundation (DB + Domain)
+  ✦ Migrations: accounts table, transactions ledger table
+  ✦ Money value object (using bcmath, never float)
+  ✦ Account aggregate with balance logic
+  ✦ Unit tests for domain layer
+
+Phase 2 — Core Transfer Logic
+  ✦ TransferService with SELECT FOR UPDATE + DB transaction
+  ✦ Deadlock prevention (always lock lower ID first)
+  ✦ Insufficient funds exception
+  ✦ Integration test: concurrent transfers on same account
+
+Phase 3 — Redis Layer
+  ✦ Idempotency middleware (check → execute → store)
+  ✦ Rate limiter (sliding window, configurable per account)
+  ✦ Integration tests for duplicate request handling
+
+Phase 4 — API Layer
+  ✦ TransferController + request DTO validation
+  ✦ Structured error responses (RFC 7807 Problem Details)
+  ✦ Auth (API key middleware — simple but production-appropriate for MVP)
+  ✦ Monolog structured JSON logging
+
+Phase 5 — Quality & Docs
+  ✦ Docker Compose (PHP 8.3, MySQL 8, Redis 7)
+  ✦ GitHub Actions CI (tests + static analysis)
+  ✦ PHPStan level 8, PHP CS Fixer
+  ✦ README: setup, curl examples, architecture decisions
