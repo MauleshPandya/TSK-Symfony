@@ -271,7 +271,7 @@ tests/
 
 ---
 
-## Load Testing
+## Load Testing and UAT
 
 For production load testing under concurrent conditions:
 
